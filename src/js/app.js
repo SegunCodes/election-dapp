@@ -1,64 +1,129 @@
 App = {
-  web3Provider: null,
+  web3provideweb3Providerr: null,
   contracts: {},
+  account: '0x0',
+  // hasVoted: false,
 
-  init: async function() {
-    // Load pets.
-    $.getJSON('../pets.json', function(data) {
-      var petsRow = $('#petsRow');
-      var petTemplate = $('#petTemplate');
-
-      for (i = 0; i < data.length; i ++) {
-        petTemplate.find('.panel-title').text(data[i].name);
-        petTemplate.find('img').attr('src', data[i].picture);
-        petTemplate.find('.pet-breed').text(data[i].breed);
-        petTemplate.find('.pet-age').text(data[i].age);
-        petTemplate.find('.pet-location').text(data[i].location);
-        petTemplate.find('.btn-adopt').attr('data-id', data[i].id);
-
-        petsRow.append(petTemplate.html());
-      }
-    });
-
-    return await App.initWeb3();
+  init: function() {
+    console.log('App Initialized...');
+    App.initWeb3();
   },
 
-  initWeb3: async function() {
-    /*
-     * Replace me...
-     */
-
+  initWeb3: function() {
+    if(window.ethereum) {
+      console.log('MetaMask Installed...');
+      App.web3Provider = window.ethereum;
+      window.web3 = new Web3(window.ethereum);
+      window.ethereum.request({ method: 'eth_requestAccounts' });
+    }else {
+      // Specify default instance if no web3 instance provided
+      App.web3Provider = new Web3.providers.HttpProvider('http://localhost:7545');
+      window.web3 = new Web3(window.ethereum);
+    }
     return App.initContract();
   },
 
   initContract: function() {
-    /*
-     * Replace me...
-     */
-
-    return App.bindEvents();
+    $.getJSON("Election.json", function(election) {
+      // Instantiate a new truffle contract from the artifact
+      App.contracts.Election = TruffleContract(election);
+      // Connect provider to interact with contract
+      App.contracts.Election.setProvider(App.web3Provider);
+      return App.render();
+      // App.contracts.Election.deployed().then(function(instance) {
+      //   console.log('Election Contract Address: ', instance.address);
+      //   App.render();
+      //   App.listenForEvents();
+      // });
+    });
   },
 
-  bindEvents: function() {
-    $(document).on('click', '.btn-adopt', App.handleAdopt);
+  // Listen for events emitted from the contract
+  // listenForEvents: function() {
+  //   App.contracts.Election.deployed().then(function(instance) {
+  //     instance.votedEvent({}, {
+  //       fromBlock: 0,
+  //       toBlock: 'latest'
+  //     }).watch(function(error, event) {
+  //       console.log("event triggered", event)
+  //       // Reload when a new vote is recorded
+  //       App.render();
+  //     });
+  //   });
+  // },
+
+  render: function() {
+    var electionInstance;
+    var loader = $("#loader");
+    var content = $("#content");
+
+    loader.show();
+    content.hide();
+
+    // Load account data
+    web3.eth.getCoinbase(function(err, account) {
+      if (err === null) {
+        App.account = account;
+        console.log(account);
+        $("#accountAddress").html("Your Account: " + account);
+      }
+    });
+
+    // Load contract data
+    App.contracts.Election.deployed().then(function(instance) {
+      electionInstance = instance;
+      return electionInstance.candidatesCount();
+    }).then(function(candidatesCount) {
+      var candidatesResults = $("#candidatesResults");
+      candidatesResults.empty();
+
+      // var candidatesSelect = $('#candidatesSelect');
+      // candidatesSelect.empty();
+
+      for (var i = 1; i <= candidatesCount; i++) {
+        electionInstance.candidates(i).then(function(candidate) {
+          var id = candidate[0];
+          var name = candidate[1];
+          var voteCount = candidate[2];
+
+          // Render candidate Result
+          var candidateTemplate = "<tr><th>" + id + "</th><td>" + name + "</td><td>" + voteCount + "</td></tr>"
+          candidatesResults.append(candidateTemplate);
+          console.log(candidateTemplate);
+
+          // Render candidate ballot option
+          // var candidateOption = "<option value='" + id + "' >" + name + "</ option>"
+          // candidatesSelect.append(candidateOption);
+        });
+      }
+      // return electionInstance.voters(App.account);
+    }).catch(function(error) {
+      console.warn(error);
+    });
   },
 
-  markAdopted: function() {
-    /*
-     * Replace me...
-     */
-  },
+  //should come before the catch
+  // .then(function(hasVoted) {
+  //   // Do not allow a user to vote
+  //   if(hasVoted) {
+  //     $('form').hide();
+  //   }
+  //   loader.hide();
+  //   content.show();
+  // })
 
-  handleAdopt: function(event) {
-    event.preventDefault();
-
-    var petId = parseInt($(event.target).data('id'));
-
-    /*
-     * Replace me...
-     */
-  }
-
+  // castVote: function() {
+  //   var candidateId = $('#candidatesSelect').val();
+  //   App.contracts.Election.deployed().then(function(instance) {
+  //     return instance.vote(candidateId, { from: App.account });
+  //   }).then(function(result) {
+  //     // Wait for votes to update
+  //     $("#content").hide();
+  //     $("#loader").show();
+  //   }).catch(function(err) {
+  //     console.error(err);
+  //   });
+  // }
 };
 
 $(function() {
